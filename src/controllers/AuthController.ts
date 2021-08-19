@@ -1,15 +1,15 @@
-import { Request, Response } from 'express';
-import * as jwt from 'jsonwebtoken';
-import { getRepository } from 'typeorm';
-import { validate } from 'class-validator';
+import { Request, Response } from "express";
+import * as jwt from "jsonwebtoken";
+import { getRepository } from "typeorm";
+import { validate } from "class-validator";
 
-import { User } from '../entity/User';
-import config from '../config/config';
+import { User } from "../entity/User";
+import config from "../config/config";
 
 class AuthController {
   static login = async (req: Request, res: Response) => {
     //Check if username and password are set
-    let { username,  password } = req.body;
+    let { username, password } = req.body;
     if (!(username && password)) {
       res.status(400).send();
     }
@@ -18,66 +18,65 @@ class AuthController {
     const userRepository = getRepository(User);
     let user: User;
     try {
-      user = await userRepository.findOneOrFail({ where: { username }})
+      user = await userRepository.findOneOrFail({ where: { username } });
     } catch (error) {
-      res.status(400).send()
+      res.status(401).send();
     }
 
     //Check if encrypted password match
-    if(!user.checkIfUnencryptedPasswordIsValid(password)) {
-      res.send(401).send();
-      return
+    if (!user.checkIfUnencryptedPasswordIsValid(password)) {
+      res.status(401).send();
+      return;
     }
 
-    //Sign JWT, valid for 1 hour
+    //Sing JWT, valid for 1 hour
     const token = jwt.sign(
-      {userID: user.id, username: user.username},
+      { userId: user.id, username: user.username },
       config.jwtSecret,
-      {expiresIn: "1h"}
-    )
+      { expiresIn: "1h" }
+    );
 
-    //Send me jwt in the response
-    res.send(token)
+    //Send the jwt in the response
+    res.send(token);
   };
 
   static changePassword = async (req: Request, res: Response) => {
     //Get ID from JWT
-    const id = res.locals.jstPayload.userID;
+    const id = res.locals.jwtPayload.userId;
 
-    //Get parameters from body
+    //Get parameters from the body
     const { oldPassword, newPassword } = req.body;
-    if(!(oldPassword && newPassword)) {
+    if (!(oldPassword && newPassword)) {
       res.status(400).send();
     }
 
-    //get user from the database
+    //Get user from the database
     const userRepository = getRepository(User);
     let user: User;
     try {
-      user = await userRepository.findOneOrFail(id)
+      user = await userRepository.findOneOrFail(id);
     } catch (id) {
       res.status(401).send();
     }
 
     //Check if old password matchs
-    if(!user.checkIfUnencryptedPasswordIsValid(oldPassword)) {
-      res.status(401).send()
+    if (!user.checkIfUnencryptedPasswordIsValid(oldPassword)) {
+      res.status(401).send();
       return;
     }
 
-    //Validate the model (password lenght)
-    user.password = newPassword
+    //Validate de model (password lenght)
+    user.password = newPassword;
     const errors = await validate(user);
-    if(errors.length > 0) {
+    if (errors.length > 0) {
       res.status(400).send(errors);
-      return
+      return;
     }
-
     //Hash the new password and save
-    user.hashPassword()
-    userRepository.save(user)
+    user.hashPassword();
+    userRepository.save(user);
 
-    res.status(204).send()
+    res.status(204).send();
   };
 }
 export default AuthController;
